@@ -52,6 +52,7 @@ def chunking_by_token_size(
     split_by_character_only: bool = False,
     overlap_token_size: int = 128,
     max_token_size: int = 1024,
+    file_path: str = "unknown_source",
 ) -> list[dict[str, Any]]:
     tokens = tokenizer.encode(content)
     results: list[dict[str, Any]] = []
@@ -83,6 +84,7 @@ def chunking_by_token_size(
                     "tokens": _len,
                     "content": chunk.strip(),
                     "chunk_order_index": index,
+                    "file_path": file_path,
                 }
             )
     else:
@@ -95,6 +97,7 @@ def chunking_by_token_size(
                     "tokens": min(max_token_size, len(tokens) - start),
                     "content": chunk_content.strip(),
                     "chunk_order_index": index,
+                    "file_path": file_path,
                 }
             )
     return results
@@ -595,7 +598,7 @@ async def _rebuild_single_entity(
             "description": final_description,
             "entity_type": entity_type,
             "source_id": GRAPH_FIELD_SEP.join(chunk_ids),
-            "file_path": GRAPH_FIELD_SEP.join(file_paths)
+            "file_path": next(iter(file_paths))
             if file_paths
             else current_entity.get("file_path", "unknown_source"),
         }

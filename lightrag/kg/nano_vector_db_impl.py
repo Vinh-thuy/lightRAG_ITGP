@@ -60,6 +60,7 @@ class NanoVectorDBStorage(BaseVectorStorage):
             self.embedding_func.embedding_dim,
             storage_file=self._client_file_name,
         )
+        self.meta_fields.add("file_path")
 
     async def initialize(self):
         """Initialize storage data"""

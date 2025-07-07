@@ -90,18 +90,74 @@ async def initialize_rag():
     return rag
 
 
+async def insert_documents(rag, file_paths):
+    """
+    Insère un ou plusieurs documents dans la base de connaissances RAG.
+    
+    Args:
+        rag: Instance de LightRAG
+        file_paths: Dictionnaire des fichiers à insérer avec leur doc_id
+                  Exemple: {"livre1": "chemin/vers/livre1.txt", ...}
+    """
+    for doc_id, file_path in file_paths.items():
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                print(f"\nInsertion du document: {doc_id}")
+                # Passer explicitement le file_path à ainsert()
+                await rag.ainsert(f.read(), file_paths=[file_path])
+                print(f"Document '{doc_id}' inséré avec succès")
+        except Exception as e:
+            print(f"Erreur lors de l'insertion de {doc_id}: {str(e)}")
+            raise  # Relancer l'exception pour faciliter le débogage
+
+
+async def query_documents(rag, question, doc_ids=None):
+    """
+    Effectue des requêtes sur les documents chargés dans RAG.
+    
+    Args:
+        rag: Instance de LightRAG
+        question: Question à poser
+        doc_ids: Liste des doc_ids à interroger (None pour tous les documents)
+    """
+    # Configuration des paramètres de requête
+    params = {
+        'naive': QueryParam(mode="naive"),
+        'local': QueryParam(mode="local"),
+        'global': QueryParam(mode="global"),
+        'hybrid': QueryParam(mode="hybrid")
+    }
+    
+    if doc_ids:
+        print(f"\nRecherche dans les documents: {', '.join(doc_ids)}")
+        for key in params:
+            params[key] = QueryParam(mode=key, doc_ids=doc_ids)
+    
+    # Exécution des requêtes
+    for mode, param in params.items():
+        print(f"\n{'=' * 20}")
+        print(f"Mode: {mode.upper()}")
+        print(f"Question: {question}")
+        print(f"{'=' * 20}")
+        try:
+            response = await rag.aquery(question, param=param)
+            print(response)
+        except Exception as e:
+            print(f"Erreur lors de la requête en mode {mode}: {str(e)}")
+
+
 async def main():
-    # Check if OPENAI_API_KEY environment variable exists
+    # Vérification de la clé API OpenAI
     if not os.getenv("OPENAI_API_KEY"):
         print(
-            "Error: OPENAI_API_KEY environment variable is not set. Please set this variable before running the program."
+            "Erreur: La variable d'environnement OPENAI_API_KEY n'est pas définie."
+            "\nVeuillez définir cette variable avant d'exécuter le programme."
+            "\nExemple: export OPENAI_API_KEY='votre-clef-api'"
         )
-        print("You can set the environment variable by running:")
-        print("  export OPENAI_API_KEY='your-openai-api-key'")
-        return  # Exit the async function
+        return
 
     try:
-        # Clear old data files
+        # Nettoyage des anciens fichiers
         files_to_delete = [
             "graph_chunk_entity_relation.graphml",
             "kv_store_doc_status.json",
@@ -116,65 +172,38 @@ async def main():
             file_path = os.path.join(WORKING_DIR, file)
             if os.path.exists(file_path):
                 os.remove(file_path)
-                print(f"Deleting old file:: {file_path}")
+                print(f"Suppression de l'ancien fichier: {file_path}")
 
-        # Initialize RAG instance
+        # Initialisation de RAG
+        print("\nInitialisation de LightRAG...")
         rag = await initialize_rag()
 
-        # Test embedding function
-        test_text = ["This is a test string for embedding."]
+        # Test de la fonction d'embedding
+        test_text = ["Ceci est une chaîne de test pour l'embedding."]
         embedding = await rag.embedding_func(test_text)
-        embedding_dim = embedding.shape[1]
-        print("\n=======================")
-        print("Test embedding function")
-        print("========================")
-        print(f"Test dict: {test_text}")
-        print(f"Detected embedding dimension: {embedding_dim}\n\n")
+        print("\nTest de la fonction d'embedding:")
+        print(f"Texte de test: {test_text}")
+        print(f"Dimension détectée: {embedding.shape[1]}")
 
-        with open("./book.txt", "r", encoding="utf-8") as f:
-            await rag.ainsert(f.read())
+        # Insertion des documents
+        documents = {
+            "dickens": "./book.txt",
+            "le_petit_prince": "./book_2.txt"
+        }
+        await insert_documents(rag, documents)
 
-        # Perform naive search
-        print("\n=====================")
-        print("Query mode: naive")
-        print("=====================")
-        print(
-            await rag.aquery(
-                "What are the top themes in this story?", param=QueryParam(mode="naive")
-            )
-        )
+        # Exemples de requêtes
+        questions = [
+            "Quelle est la signification du dessin du serpent boa que le narrateur a fait enfant ?",
+        ]
 
-        # Perform local search
-        print("\n=====================")
-        print("Query mode: local")
-        print("=====================")
-        print(
-            await rag.aquery(
-                "What are the top themes in this story?", param=QueryParam(mode="local")
-            )
-        )
+        for question in questions:
+            # Requête sur tous les documents
+            await query_documents(rag, question)
+            
+            # Requête sur un document spécifique
+            # await query_documents(rag, question, doc_ids=["livre1"])
 
-        # Perform global search
-        print("\n=====================")
-        print("Query mode: global")
-        print("=====================")
-        print(
-            await rag.aquery(
-                "What are the top themes in this story?",
-                param=QueryParam(mode="global"),
-            )
-        )
-
-        # Perform hybrid search
-        print("\n=====================")
-        print("Query mode: hybrid")
-        print("=====================")
-        print(
-            await rag.aquery(
-                "What are the top themes in this story?",
-                param=QueryParam(mode="hybrid"),
-            )
-        )
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:

@@ -963,6 +963,7 @@ class LightRAG:
                                     split_by_character_only,
                                     self.chunk_overlap_token_size,
                                     self.chunk_token_size,
+                                    file_path=file_path,
                                 )
                             }
 

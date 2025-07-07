@@ -27,9 +27,7 @@ def configure_logging():
 
     # Get log directory path from environment variable or use current directory
     log_dir = os.getenv("LOG_DIR", os.getcwd())
-    log_file_path = os.path.abspath(
-        os.path.join(log_dir, "lightrag_compatible_demo.log")
-    )
+    log_file_path = os.path.abspath(os.path.join(log_dir, "lightrag_compatible_demo.log"))
 
     print(f"\nLightRAG compatible demo log file: {log_file_path}\n")
     os.makedirs(os.path.dirname(log_dir), exist_ok=True)
@@ -105,6 +103,82 @@ async def print_stream(stream):
             print(chunk, end="", flush=True)
 
 
+async def insert_documents(rag, file_paths):
+    """
+    Insère un ou plusieurs documents dans la base de connaissances RAG.
+    
+    Args:
+        rag: Instance de LightRAG
+        file_paths: Dictionnaire des fichiers à insérer avec leur doc_id
+                  Exemple: {"livre1": "chemin/vers/livre1.txt", ...}
+    """
+    for doc_id, file_path in file_paths.items():
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                print(f"\nInsertion du document: {doc_id}")
+                # Passer explicitement le file_path à ainsert()
+                await rag.ainsert(f.read(), file_paths=[file_path])
+                print(f"Document '{doc_id}' inséré avec succès")
+        except Exception as e:
+            print(f"Erreur lors de l'insertion de {doc_id}: {str(e)}")
+            raise  # Relancer l'exception pour faciliter le débogage
+
+
+async def query_documents(rag, question, doc_ids=None):
+    """
+    Effectue des requêtes sur les documents chargés dans RAG.
+    
+    Args:
+        rag: Instance de LightRAG
+        question: Question à poser
+        doc_ids: Liste des doc_ids à interroger (None pour tous les documents)
+    """
+    # Configuration des paramètres de requête
+    params = {
+        'naive': QueryParam(mode="naive"),
+        'local': QueryParam(mode="local"),
+        'global': QueryParam(mode="global"),
+        'hybrid': QueryParam(mode="hybrid")
+    }
+    
+    if doc_ids:
+        print(f"\nRecherche dans les documents: {', '.join(doc_ids)}")
+        for key in params:
+            params[key] = QueryParam(mode=key, doc_ids=doc_ids)
+    
+    # Exécution des requêtes
+    for mode, param in params.items():
+        print(f"\n{'=' * 20}")
+        print(f"Mode: {mode.upper()}")
+        print(f"Question: {question}")
+        print(f"{ '=' * 20}")
+        try:
+            response = await rag.aquery(question, param=param)
+            if inspect.isasyncgen(response):
+                await print_stream(response)
+            else:
+                print(response)
+        except Exception as e:
+            print(f"Erreur lors de la requête en mode {mode}: {str(e)}")
+
+
+import httpx
+
+async def infinity_embed(texts, embed_model, host, api_key):
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "input": texts,
+        "model": embed_model
+    }
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"{host}/embeddings", headers=headers, json=payload)
+        response.raise_for_status() # Lève une exception pour les codes d'état HTTP 4xx/5xx
+        return response.json()["data"]
+
+
 async def initialize_rag():
     rag = LightRAG(
         working_dir=WORKING_DIR,
@@ -112,10 +186,11 @@ async def initialize_rag():
         embedding_func=EmbeddingFunc(
             embedding_dim=int(os.getenv("EMBEDDING_DIM", "1024")),
             max_token_size=int(os.getenv("MAX_EMBED_TOKENS", "8192")),
-            func=lambda texts: ollama_embed(
+            func=lambda texts: infinity_embed(
                 texts,
-                embed_model=os.getenv("EMBEDDING_MODEL", "bge-m3:latest"),
-                host=os.getenv("EMBEDDING_BINDING_HOST", "http://localhost:11434"),
+                embed_model=os.getenv("EMBEDDING_MODEL", "bge-m3:latest"), # Le modèle peut être configuré via ENV
+                host=os.getenv("EMBEDDING_BINDING_HOST", "http://localhost:8000"), # URL de l'API Infinity
+                api_key=os.getenv("EMBEDDING_API_KEY"), # Clé API pour l'API Infinity
             ),
         ),
     )
@@ -127,8 +202,18 @@ async def initialize_rag():
 
 
 async def main():
+    # Vérification des variables d'environnement pour les modèles compatibles OpenAI
+    if not os.getenv("LLM_MODEL") or not os.getenv("EMBEDDING_MODEL"):
+        print(
+            "Erreur: Les variables d'environnement LLM_MODEL et EMBEDDING_MODEL doivent être définies."
+            "\nVeuillez définir ces variables avant d'exécuter le programme."
+            "\nExemple: export LLM_MODEL='deepseek-chat'"
+            "\nExemple: export EMBEDDING_MODEL='bge-m3:latest'"
+        )
+        return
+
     try:
-        # Clear old data files
+        # Nettoyage des anciens fichiers
         files_to_delete = [
             "graph_chunk_entity_relation.graphml",
             "kv_store_doc_status.json",
@@ -137,68 +222,41 @@ async def main():
             "vdb_chunks.json",
             "vdb_entities.json",
             "vdb_relationships.json",
+            "llm_response_cache.json", # Ajouté pour la cohérence
+            "embedding_cache.json", # Ajouté pour la cohérence
         ]
 
         for file in files_to_delete:
             file_path = os.path.join(WORKING_DIR, file)
             if os.path.exists(file_path):
                 os.remove(file_path)
-                print(f"Deleting old file:: {file_path}")
+                print(f"Suppression de l'ancien fichier: {file_path}")
 
-        # Initialize RAG instance
+        # Initialisation de LightRAG
+        print("\nInitialisation de LightRAG...")
         rag = await initialize_rag()
 
-        # Test embedding function
-        test_text = ["This is a test string for embedding."]
+        # Test de la fonction d'embedding
+        test_text = ["Ceci est une chaîne de test pour l'embedding."]
         embedding = await rag.embedding_func(test_text)
-        embedding_dim = embedding.shape[1]
-        print("\n=======================")
-        print("Test embedding function")
-        print("========================")
-        print(f"Test dict: {test_text}")
-        print(f"Detected embedding dimension: {embedding_dim}\n\n")
+        print("\nTest de la fonction d'embedding:")
+        print(f"Texte de test: {test_text}")
+        print(f"Dimension détectée: {embedding.shape[1]}")
 
-        with open("./book.txt", "r", encoding="utf-8") as f:
-            await rag.ainsert(f.read())
+        # Insertion des documents
+        documents = {
+            "dickens": "./book.txt",
+            "le_petit_prince": "./book_2.txt"
+        }
+        await insert_documents(rag, documents)
 
-        # Perform naive search
-        print("\n=====================")
-        print("Query mode: naive")
-        print("=====================")
-        resp = await rag.aquery(
-            "What are the top themes in this story?",
-            param=QueryParam(mode="naive", stream=True),
-        )
-        if inspect.isasyncgen(resp):
-            await print_stream(resp)
-        else:
-            print(resp)
+        # Exemples de requêtes
+        questions = [
+            "Quelle est la signification du dessin du serpent boa que le narrateur a fait enfant ?",
+        ]
 
-        # Perform local search
-        print("\n=====================")
-        print("Query mode: local")
-        print("=====================")
-        resp = await rag.aquery(
-            "What are the top themes in this story?",
-            param=QueryParam(mode="local", stream=True),
-        )
-        if inspect.isasyncgen(resp):
-            await print_stream(resp)
-        else:
-            print(resp)
-
-        # Perform global search
-        print("\n=====================")
-        print("Query mode: global")
-        print("=====================")
-        resp = await rag.aquery(
-            "What are the top themes in this story?",
-            param=QueryParam(mode="global", stream=True),
-        )
-        if inspect.isasyncgen(resp):
-            await print_stream(resp)
-        else:
-            print(resp)
+        for question in questions:
+            await query_documents(rag, question)
 
         # Perform hybrid search
         print("\n=====================")
