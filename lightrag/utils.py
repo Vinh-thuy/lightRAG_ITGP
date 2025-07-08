@@ -699,30 +699,69 @@ class Tokenizer:
 
 class SimpleTokenizer(Tokenizer):
     """
-    A simple tokenizer that splits text by spaces and common punctuation.
-    This is a basic implementation that doesn't require internet access.
+    A Tokenizer implementation that doesn't require internet access.
+    This is a simplified version that mimics tiktoken's interface.
     """
 
-    def __init__(self, model_name: str = "simple"):
+    def __init__(self, model_name: str = "gpt-4o-mini"):
         """
-        Initializes the SimpleTokenizer.
-        
+        Initializes the SimpleTokenizer with a specified model name.
+
         Args:
-            model_name: Not used, kept for compatibility with the parent class.
+            model_name: The model name (kept for compatibility with the original interface).
+                       Defaults to "gpt-4o-mini" to match the original TiktokenTokenizer.
         """
         class SimpleTokenizerImpl(TokenizerInterface):
+            def __init__(self):
+                self._tokens_cache = {}
+                self._text_cache = {}
+                
             def encode(self, content: str) -> List[int]:
-                # Simple tokenization by splitting on whitespace and common punctuation
+                """
+                Encodes text into token integers.
+                
+                Args:
+                    content: The text to encode.
+                    
+                Returns:
+                    A list of token integers.
+                """
                 import re
-                # Split on whitespace and common punctuation
+                # Simple tokenization by splitting on whitespace and common punctuation
                 tokens = re.findall(r"\w+|[^\w\s]|\s+\n", content)
-                return [hash(token) % (2**32) for token in tokens if token.strip()]
+                
+                # Generate consistent token IDs and cache the mapping
+                token_ids = []
+                for token in tokens:
+                    if token.strip():  # Skip empty tokens
+                        if token not in self._tokens_cache:
+                            # Generate a new token ID and cache it
+                            token_id = hash(token) % (2**32)
+                            self._tokens_cache[token] = token_id
+                            self._text_cache[token_id] = token
+                        token_ids.append(self._tokens_cache[token])
+                
+                return token_ids
                 
             def decode(self, tokens: List[int]) -> str:
-                # Since we can't perfectly reverse the hash, we'll return a placeholder
-                return f"[SimpleTokenizer: {len(tokens)} tokens]"
+                """
+                Decodes token integers back to text.
                 
-        super().__init__(model_name="simple", tokenizer=SimpleTokenizerImpl())
+                Args:
+                    tokens: List of token integers to decode.
+                    
+                Returns:
+                    The decoded text.
+                """
+                # Reconstruct text from cached tokens
+                result = []
+                for token_id in tokens:
+                    if token_id in self._text_cache:
+                        result.append(self._text_cache[token_id])
+                return ''.join(result)
+        
+        # Initialize with the implementation
+        super().__init__(model_name=model_name, tokenizer=SimpleTokenizerImpl())
 
 
 # For backward compatibility
