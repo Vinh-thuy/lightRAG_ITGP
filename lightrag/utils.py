@@ -236,8 +236,27 @@ class EmbeddingFunc:
     func: callable
     # concurrent_limit: int = 16
 
-    async def __call__(self, *args, **kwargs) -> np.ndarray:
-        return await self.func(*args, **kwargs)
+    def __call__(self, *args, **kwargs):
+        return self.func(*args, **kwargs)
+
+
+class SimpleEmbeddingFunc(EmbeddingFunc):
+    """
+    A simple embedding function that returns dummy embeddings.
+    This is for offline use when no actual embedding model is available.
+    """
+
+    def __init__(self, embedding_dim: int = 768, max_token_size: int = 512):
+        self.embedding_dim = embedding_dim
+        self.max_token_size = max_token_size
+
+        def _dummy_embed(texts: List[str]) -> np.ndarray:
+            # Return a dummy numpy array of zeros or random numbers
+            # The shape should be (len(texts), embedding_dim)
+            import numpy as np
+            return np.zeros((len(texts), self.embedding_dim), dtype=np.float32)
+
+        super().__init__(embedding_dim=embedding_dim, max_token_size=max_token_size, func=_dummy_embed)
 
 
 def locate_json_string_body_from_string(content: str) -> str | None:
