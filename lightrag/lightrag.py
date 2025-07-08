@@ -357,6 +357,8 @@ class LightRAG:
         logger.debug(f"LightRAG init with param:\n  {_print_config}\n")
 
         # Init Embedding
+        if self.embedding_func is None:
+            self.embedding_func = SimpleEmbeddingFunc()
         self.embedding_func = priority_limit_async_func_call(
             self.embedding_func_max_async
         )(self.embedding_func)
