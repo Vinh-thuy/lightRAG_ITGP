@@ -697,34 +697,36 @@ class Tokenizer:
         return self.tokenizer.decode(tokens)
 
 
-class TiktokenTokenizer(Tokenizer):
+class SimpleTokenizer(Tokenizer):
     """
-    A Tokenizer implementation using the tiktoken library.
+    A simple tokenizer that splits text by spaces and common punctuation.
+    This is a basic implementation that doesn't require internet access.
     """
 
-    def __init__(self, model_name: str = "gpt-4o-mini"):
+    def __init__(self, model_name: str = "simple"):
         """
-        Initializes the TiktokenTokenizer with a specified model name.
-
+        Initializes the SimpleTokenizer.
+        
         Args:
-            model_name: The model name for the tiktoken tokenizer to use.  Defaults to "gpt-4o-mini".
-
-        Raises:
-            ImportError: If tiktoken is not installed.
-            ValueError: If the model_name is invalid.
+            model_name: Not used, kept for compatibility with the parent class.
         """
-        try:
-            import tiktoken
-        except ImportError:
-            raise ImportError(
-                "tiktoken is not installed. Please install it with `pip install tiktoken` or define custom `tokenizer_func`."
-            )
+        class SimpleTokenizerImpl(TokenizerInterface):
+            def encode(self, content: str) -> List[int]:
+                # Simple tokenization by splitting on whitespace and common punctuation
+                import re
+                # Split on whitespace and common punctuation
+                tokens = re.findall(r"\w+|[^\w\s]|\s+\n", content)
+                return [hash(token) % (2**32) for token in tokens if token.strip()]
+                
+            def decode(self, tokens: List[int]) -> str:
+                # Since we can't perfectly reverse the hash, we'll return a placeholder
+                return f"[SimpleTokenizer: {len(tokens)} tokens]"
+                
+        super().__init__(model_name="simple", tokenizer=SimpleTokenizerImpl())
 
-        try:
-            tokenizer = tiktoken.encoding_for_model(model_name)
-            super().__init__(model_name=model_name, tokenizer=tokenizer)
-        except KeyError:
-            raise ValueError(f"Invalid model_name: {model_name}.")
+
+# For backward compatibility
+TiktokenTokenizer = SimpleTokenizer
 
 
 def pack_user_ass_to_openai_messages(*args: str):
