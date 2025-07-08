@@ -86,15 +86,36 @@ if not os.path.exists(WORKING_DIR):
 async def llm_model_func(
     prompt, system_prompt=None, history_messages=[], keyword_extraction=False, **kwargs
 ) -> str:
-    return await openai_complete_if_cache(
-        os.getenv("LLM_MODEL", "deepseek-chat"),
-        prompt,
-        system_prompt=system_prompt,
-        history_messages=history_messages,
-        api_key=os.getenv("LLM_BINDING_API_KEY") or os.getenv("OPENAI_API_KEY"),
-        base_url=os.getenv("LLM_BINDING_HOST", "https://api.deepseek.com"),
-        **kwargs,
+    # Initialisation du client ChatOpenAI
+    chat = ChatOpenAI(
+        model=os.getenv("LLM_MODEL", "gpt-3.5-turbo"),
+        openai_api_key=os.getenv("LLM_BINDING_API_KEY") or os.getenv("OPENAI_API_KEY"),
+        base_url=os.getenv("LLM_BINDING_HOST", "https://api.openai.com/v1"),
+        **{k: v for k, v in kwargs.items() if k in ["temperature", "max_tokens"]}  # Filtrage des paramètres valides
     )
+    
+    # Préparation des messages
+    messages = []
+    
+    # Ajout du message système s'il est fourni
+    if system_prompt:
+        messages.append(SystemMessage(content=system_prompt))
+    
+    # Ajout de l'historique s'il existe
+    for msg in history_messages:
+        if msg["role"] == "user":
+            messages.append(HumanMessage(content=msg["content"]))
+        else:  # assistant
+            messages.append(AIMessage(content=msg["content"]))
+    
+    # Ajout du prompt actuel
+    messages.append(HumanMessage(content=prompt))
+    
+    # Appel au modèle
+    response = await chat.ainvoke(messages)
+    
+    # Retour de la réponse
+    return response.content
 
 
 async def print_stream(stream):
