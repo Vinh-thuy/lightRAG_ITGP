@@ -1,3 +1,15 @@
+infinity_embedder = InfinityEmbeddingFunc(endpoint_url="http://localhost:8000/embed", embedding_dim=1024)
+
+rag = LightRAG(
+    working_dir=WORKING_DIR,
+    embedding_func=infinity_embedder,
+    llm_model_func=...,
+)
+
+
+------
+
+
 from lightrag.utils import EmbeddingFunc
 import numpy as np
 import httpx  # Asynchrone
