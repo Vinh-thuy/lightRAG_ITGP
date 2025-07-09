@@ -83,3 +83,42 @@ class InfinityEmbeddingFunc(EmbeddingFunc):
                 arr = arr.reshape(1, -1)
             assert arr.shape == (len(texts), self.embedding_dim), f"Expected {(len(texts), self.embedding_dim)}, got {arr.shape}"
             return arr
+
+
+
+----
+
+
+import asyncio
+import httpx
+import json
+
+# Paramètres à adapter
+API_URL = "https://ton-endpoint-infinity.com/embed"   # Mets ici ton URL complète
+API_KEY = "sk-demo-1234567890"                        # Mets ici ta clé API Infinity
+
+async def test_infinity():
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {API_KEY}"
+    }
+    payload = {
+        "model": "multilingual-e5-large",
+        "encoding_format": "float",
+        "user": "string",
+        "input": ["Bonjour, ceci est un test depuis LightRAG!"],
+        "modality": "text"
+    }
+    async with httpx.AsyncClient(verify=False) as client:
+        try:
+            response = await client.post(API_URL, json=payload, headers=headers)
+            print("Status code:", response.status_code)
+            print("Réponse brute:", response.text)
+            response.raise_for_status()
+            response_data = response.json()
+            print("Réponse JSON:", json.dumps(response_data, indent=2))
+        except Exception as e:
+            print("Erreur lors de l'appel au endpoint Infinity:", e)
+
+if __name__ == "__main__":
+    asyncio.run(test_infinity())
