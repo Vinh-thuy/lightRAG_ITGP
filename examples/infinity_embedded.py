@@ -43,20 +43,14 @@ class InfinityEmbeddingFunc(EmbeddingFunc):
 
 ---
 
-
-
 from lightrag.utils import EmbeddingFunc
 import numpy as np
-import os
-import httpx  # Asynchrone et moderne
+import httpx  # Pour les appels HTTP asynchrones
 
 class InfinityEmbeddingFunc(EmbeddingFunc):
-    # Variables en dur pour test/démo (à adapter selon ton cas réel)
-    API_URL = "https://dmn-ap261!ilab.cloud.echonet/ULma/meet.../ULm-serv-infinity/..."  # Mets l’URL complète ici
-    MODEL = "multilingual-e5-large"
-    ENCODING_FORMAT = "float"
-    MODALITY = "text"
-    USER = "string"  # Peut être adapté ou rendu dynamique
+    # Variables en dur pour test/démo
+    API_URL = "https://ton-endpoint-infinity.com/embed"  # Mets ici ton URL complète
+    API_KEY = "sk-demo-1234567890"  # Mets ici ta clé API Infinity
 
     def __init__(self, embedding_dim=1024, max_token_size=8192):
         super().__init__(
@@ -66,19 +60,17 @@ class InfinityEmbeddingFunc(EmbeddingFunc):
         )
 
     async def func(self, texts: list[str]) -> np.ndarray:
-        api_key = os.getenv("LMMAAS_API_KEY") or "sk-demo-1234567890"  # fallback pour test
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
+            "Authorization": f"Bearer {self.API_KEY}"
         }
         payload = {
-            "model": self.MODEL,
-            "encoding_format": self.ENCODING_FORMAT,
-            "user": self.USER,
+            "model": "multilingual-e5-large",
+            "encoding_format": "float",
+            "user": "string",
             "input": texts,
-            "modality": self.MODALITY
+            "modality": "text"
         }
-        # Appel asynchrone
         async with httpx.AsyncClient(verify=False) as client:
             response = await client.post(self.API_URL, json=payload, headers=headers)
             response.raise_for_status()
@@ -86,5 +78,8 @@ class InfinityEmbeddingFunc(EmbeddingFunc):
             # Adapter la clé selon la vraie réponse de ton API
             vectors = response_data["embeddings"]
             arr = np.array(vectors, dtype=np.float32)
+            # Correction : toujours retourner un tableau 2D
+            if arr.ndim == 1:
+                arr = arr.reshape(1, -1)
             assert arr.shape == (len(texts), self.embedding_dim), f"Expected {(len(texts), self.embedding_dim)}, got {arr.shape}"
             return arr
