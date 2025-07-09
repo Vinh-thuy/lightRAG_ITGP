@@ -122,3 +122,37 @@ async def test_infinity():
 
 if __name__ == "__main__":
     asyncio.run(test_infinity())
+
+
+
+----- 
+
+
+
+import numpy as np
+import httpx
+
+async def infinity_embed_batch(texts, embed_model, host, api_key):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    results = []
+    async with httpx.AsyncClient(verify=False) as client:
+        for text in texts:
+            payload = {
+                "model": embed_model,
+                "encoding_format": "float",
+                "user": "string",
+                "input": [text],
+                "modality": "text"
+            }
+            response = await client.post(host, json=payload, headers=headers)
+            response.raise_for_status()
+            response_data = response.json()
+            vec = response_data["embeddings"]
+            arr = np.array(vec, dtype=np.float32)
+            if arr.ndim == 1:
+                arr = arr.reshape(1, -1)
+            results.append(arr[0])
+    return np.vstack(results)
