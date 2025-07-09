@@ -156,3 +156,34 @@ async def infinity_embed_batch(texts, embed_model, host, api_key):
                 arr = arr.reshape(1, -1)
             results.append(arr[0])
     return np.vstack(results)
+
+
+----
+
+
+EmbeddingFunc(
+    embedding_dim=1024,
+    max_token_size=8192,
+    func=lambda texts: infinity_embed_batch(
+        texts,
+        embed_model="bge-m3:latest",
+        host="http://localhost:8000",
+        api_key="sk-demo-1234567890"
+    )
+)
+
+
+-----
+
+
+
+EmbeddingFunc(
+    embedding_dim=1024,
+    max_token_size=8192,
+    func=lambda texts: infinity_embed_batch(
+        texts,
+        embed_model="bge-m3:latest",
+        host="http://localhost:8000",
+        api_key="sk-demo-1234567890"
+    )
+)
