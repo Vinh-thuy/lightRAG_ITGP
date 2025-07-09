@@ -216,3 +216,55 @@ if __name__ == "__main__":
     configure_logging()
     asyncio.run(main())
     print("\nDone!")
+
+
+
+------
+
+
+
+
+
+from lightrag.utils import EmbeddingFunc
+import numpy as np
+import httpx  # Pour les appels HTTP asynchrones
+
+class InfinityEmbeddingFunc(EmbeddingFunc):
+    API_URL = "https://ton-endpoint-infinity.com/embed"  # Mets ici ton URL complète
+    API_KEY = "sk-demo-1234567890"  # Mets ici ta clé API Infinity
+
+    def __init__(self, embedding_dim=1024, max_token_size=8192):
+        super().__init__(
+            embedding_dim=embedding_dim,
+            max_token_size=max_token_size,
+            func=self.func
+        )
+
+    async def func(self, texts: list[str]) -> np.ndarray:
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.API_KEY}"
+        }
+        results = []
+        async with httpx.AsyncClient(verify=False) as client:
+            for text in texts:
+                payload = {
+                    "model": "multilingual-e5-large",
+                    "encoding_format": "float",
+                    "user": "string",
+                    "input": [text],  # Adapter à "input": text si l'API refuse la liste
+                    "modality": "text"
+                }
+                response = await client.post(self.API_URL, json=payload, headers=headers)
+                response.raise_for_status()
+                response_data = response.json()
+                # Adapter la clé selon la vraie réponse de ton API
+                vec = response_data["embeddings"]
+                arr = np.array(vec, dtype=np.float32)
+                # Si l'API retourne un embedding 1D, reshape
+                if arr.ndim == 1:
+                    arr = arr.reshape(1, -1)
+                results.append(arr[0])
+        all_embeddings = np.vstack(results)
+        assert all_embeddings.shape == (len(texts), self.embedding_dim), f"Expected {(len(texts), self.embedding_dim)}, got {all_embeddings.shape}"
+        return all_embeddings
