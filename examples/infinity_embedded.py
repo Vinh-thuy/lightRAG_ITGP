@@ -176,14 +176,22 @@ EmbeddingFunc(
 -----
 
 
-
-EmbeddingFunc(
-    embedding_dim=1024,
-    max_token_size=8192,
-    func=lambda texts: infinity_embed_batch(
-        texts,
-        embed_model="bge-m3:latest",
-        host="http://localhost:8000",
-        api_key="sk-demo-1234567890"
+async def initialize_rag():
+    rag = LightRAG(
+        working_dir=WORKING_DIR,
+        llm_model_func=llm_model_func,
+        embedding_func=EmbeddingFunc(
+            embedding_dim=int(os.getenv("EMBEDDING_DIM", "1024")),
+            max_token_size=int(os.getenv("MAX_EMBED_TOKENS", "8192")),
+            func=lambda texts: infinity_embed_batch(
+                texts,
+                embed_model=os.getenv("EMBEDDING_MODEL", "bge-m3:latest"),
+                host=os.getenv("EMBEDDING_BINDING_HOST", "http://localhost:8000"),
+                api_key=os.getenv("EMBEDDING_API_KEY"),
+            ),
+        ),
     )
-)
+
+    await rag.initialize_storages()
+    await initialize_pipeline_status()
+    return rag
